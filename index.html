@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>街角餐厅的邂逅</title>
+<style>
+  :root {
+    --bg: #0a0a0c;
+    --text: #f0ece4;
+    --text-dim: #b8b0a0;
+    --gold: #c8a868;
+    --gold-light: #e8d5a3;
+    --accent: #c47a5a;
+    --panel-bg: rgba(10,8,6,0.85);
+    --ui-opacity: 0.85;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  @font-face {
+    font-family: 'VN';
+    src: local('Noto Serif SC'), local('SimSun'), local('Microsoft YaHei'), local('PingFang SC');
+  }
+
+  body {
+    background: var(--bg);
+    width: 100vw; height: 100vh;
+    overflow: hidden;
+    font-family: 'Noto Serif SC', 'STSong', 'SimSun', 'PingFang SC', 'Microsoft YaHei', serif;
+    user-select: none; -webkit-user-select: none;
+    cursor: default;
+  }
+
+  /* ── Layers ── */
+  #game-view {
+    position: relative; width: 100%; height: 100%;
+    overflow: hidden;
+  }
+
+  .layer {
+    position: absolute; inset: 0;
+    transition: opacity 0.8s ease;
+  }
+
+  #bg-layer {
+    background-size: cover; background-position: center;
+    background-repeat: no-repeat;
+    z-index: 0;
+  }
+
+  #cg-layer {
+    background-size: contain; background-position: center;
+    background-repeat: no-repeat;
+    background-color: rgba(0,0,0,0.92);
+    z-index: 2; opacity: 0; pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #cg-layer.active { opacity: 1; pointer-events: auto; }
+  #cg-layer img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+  #char-layer {
+    z-index: 1; display: flex; align-items: flex-end; justify-content: center;
+    pointer-events: none; padding-bottom: 0;
+  }
+  #char-layer img {
+    max-height: 82vh; max-width: 42vw;
+    object-fit: contain; object-position: bottom;
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    filter: drop-shadow(0 8px 32px rgba(0,0,0,0.5));
+  }
+
+  /* ── UI Layer ── */
+  #ui-layer {
+    position: absolute; inset: 0; z-index: 3;
+    pointer-events: none;
+    display: flex; flex-direction: column; justify-content: flex-end;
+  }
+  #ui-layer.hidden #text-panel,
+  #ui-layer.hidden #name-tag,
+  #ui-layer.hidden #top-bar { opacity: 0; pointer-events: none; }
+
+  /* Top bar */
+  #top-bar {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 18px;
+    pointer-events: auto; z-index: 5;
+    transition: opacity 0.4s;
+  }
+  .top-btn {
+    background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.10);
+    color: rgba(255,255,255,0.7); font-size: 0.78rem;
+    padding: 6px 14px; border-radius: 20px; cursor: pointer;
+    font-family: inherit; letter-spacing: 0.04em;
+    transition: all 0.25s; pointer-events: auto;
+    backdrop-filter: blur(6px);
+  }
+  .top-btn:hover { background: rgba(0,0,0,0.65); color: #fff; border-color: rgba(255,255,255,0.25); }
+  .top-btn.active { background: rgba(200,168,104,0.25); border-color: var(--gold); color: var(--gold-light); }
+
+  #affection-indicator {
+    color: rgba(255,255,255,0.45); font-size: 0.75rem;
+    letter-spacing: 0.06em; display: flex; align-items: center; gap: 6px;
+  }
+  #affection-indicator .heart { color: var(--accent); font-size: 0.85rem; }
+
+  /* Settings panel */
+  #settings-panel {
+    position: absolute; top: 50px; right: 12px;
+    background: rgba(10,8,6,0.92); border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 16px; padding: 18px 22px; z-index: 10;
+    pointer-events: auto; backdrop-filter: blur(12px);
+    display: none; flex-direction: column; gap: 14px;
+    min-width: 240px; box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+  }
+  #settings-panel.open { display: flex; }
+  #settings-panel label {
+    display: flex; justify-content: space-between; align-items: center;
+    color: var(--text-dim); font-size: 0.8rem; letter-spacing: 0.05em;
+  }
+  #settings-panel input[type=range] {
+    width: 110px; accent-color: var(--gold);
+  }
+  #settings-panel .set-title {
+    color: var(--gold-light); font-size: 0.82rem;
+    letter-spacing: 0.08em; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding-bottom: 8px; margin-bottom: 2px;
+  }
+
+  /* Text panel */
+  #text-panel {
+    pointer-events: auto;
+    background: linear-gradient(to top, rgba(10,8,6,var(--ui-opacity)) 0%, rgba(10,8,6,calc(var(--ui-opacity)*0.85)) 70%, transparent 100%);
+    padding: 40px 32px 28px;
+    transition: opacity 0.5s;
+    min-height: 170px;
+  }
+
+  #name-tag {
+    pointer-events: auto;
+    margin: 0 32px; padding: 7px 18px;
+    background: rgba(10,8,6,0.80); border-left: 2px solid var(--gold);
+    color: var(--gold-light); font-size: 0.88rem; font-weight: 600;
+    letter-spacing: 0.08em; display: inline-block; width: fit-content;
+    border-radius: 4px 4px 0 0;
+    transition: opacity 0.4s;
+    backdrop-filter: blur(6px);
+  }
+
+  #dialogue-text {
+    color: var(--text); font-size: 1.15rem; line-height: 1.85;
+    letter-spacing: 0.04em; min-height: 60px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  }
+
+  /* Choices */
+  #choices-area {
+    display: flex; flex-direction: column; gap: 10px; margin-top: 14px;
+    pointer-events: auto;
+  }
+  .choice-btn {
+    background: rgba(200,168,104,0.08); border: 1px solid rgba(200,168,104,0.2);
+    color: var(--gold-light); font-size: 1rem; padding: 12px 20px;
+    border-radius: 10px; cursor: pointer; text-align: left;
+    font-family: inherit; letter-spacing: 0.05em;
+    transition: all 0.3s ease;
+  }
+  .choice-btn:hover {
+    background: rgba(200,168,104,0.18); border-color: var(--gold);
+    padding-left: 28px; color: #fff;
+    box-shadow: 0 4px 20px rgba(200,168,104,0.12);
+  }
+
+  /* Click indicator */
+  #click-hint {
+    position: absolute; bottom: 20px; right: 28px;
+    color: rgba(255,255,255,0.3); font-size: 0.7rem;
+    pointer-events: none; z-index: 4;
+    animation: hintPulse 2s ease-in-out infinite;
+    letter-spacing: 0.06em;
+  }
+  @keyframes hintPulse {
+    0%,100% { opacity: 0.25; }
+    50% { opacity: 0.6; }
+  }
+
+  /* Title Screen */
+  #title-screen {
+    position: absolute; inset: 0; z-index: 20;
+    background: radial-gradient(ellipse at 50% 40%, #1a1410 0%, #0a0805 70%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 30px; transition: opacity 0.8s, pointer-events 0s 0.8s;
+  }
+  #title-screen.hidden { opacity: 0; pointer-events: none; transition: opacity 0.8s, pointer-events 0s; }
+  #title-screen .title-cn {
+    font-size: 2.6rem; font-weight: 700; letter-spacing: 0.15em;
+    color: var(--gold-light);
+    text-shadow: 0 2px 20px rgba(200,168,104,0.3);
+  }
+  #title-screen .title-sub {
+    color: var(--text-dim); font-size: 0.9rem; letter-spacing: 0.12em;
+    margin-top: -16px;
+  }
+  #title-screen .start-btn {
+    background: transparent; border: 1px solid rgba(200,168,104,0.35);
+    color: var(--gold-light); font-size: 1.15rem; padding: 14px 48px;
+    border-radius: 50px; cursor: pointer; font-family: inherit;
+    letter-spacing: 0.12em; transition: all 0.4s;
+  }
+  #title-screen .start-btn:hover {
+    background: rgba(200,168,104,0.12); border-color: var(--gold);
+    box-shadow: 0 0 40px rgba(200,168,104,0.15);
+    letter-spacing: 0.18em;
+  }
+  #title-screen .title-footer {
+    color: rgba(255,255,255,0.2); font-size: 0.68rem; letter-spacing: 0.1em;
+    position: absolute; bottom: 24px;
+  }
+
+  /* Ending screen */
+  #ending-screen {
+    position: absolute; inset: 0; z-index: 22;
+    background: rgba(0,0,0,0.88);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 20px; opacity: 0; pointer-events: none; transition: opacity 1s;
+  }
+  #ending-screen.active { opacity: 1; pointer-events: auto; }
+  #ending-screen .ending-type {
+    font-size: 1rem; letter-spacing: 0.2em; color: var(--gold);
+    text-transform: uppercase;
+  }
+  #ending-screen .ending-title {
+    font-size: 2.2rem; letter-spacing: 0.12em; color: var(--gold-light);
+  }
+  #ending-screen .ending-subtitle {
+    color: var(--text-dim); font-size: 0.9rem; text-align: center;
+    max-width: 480px; line-height: 1.7; letter-spacing: 0.04em;
+  }
+
+  /* Image preload (hidden) */
+  #preload { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
+</style>
+</head>
+<body>
+
+<!-- Preload images -->
+<div id="preload"></div>
+
+<!-- Game View -->
+<div id="game-view">
+  <div class="layer" id="bg-layer"></div>
+  <div class="layer" id="char-layer"></div>
+  <div class="layer" id="cg-layer"></div>
+
+  <!-- Title Screen -->
+  <div id="title-screen">
+    <div class="title-cn">街角餐厅的邂逅</div>
+    <div class="title-sub">—— 在城市的某个角落，有一盏灯为你亮着</div>
+    <button class="start-btn" onclick="startGame()">开 始</button>
+    <div class="title-footer">A Visual Novel · 约 10 分钟</div>
+  </div>
+
+  <!-- Ending Screen -->
+  <div id="ending-screen">
+    <div class="ending-type" id="ending-type"></div>
+    <div class="ending-title" id="ending-title"></div>
+    <div class="ending-subtitle" id="ending-subtitle"></div>
+    <button class="start-btn" onclick="returnToTitle()" style="margin-top:12px;">返回标题</button>
+  </div>
+
+  <!-- UI Layer -->
+  <div id="ui-layer">
+    <!-- Top bar -->
+    <div id="top-bar">
+      <button class="top-btn" onclick="toggleSettings()" title="设置">⚙ 设置</button>
+      <button class="top-btn" id="btn-hide-ui" onclick="toggleHideUI()" title="隐藏界面">👁 隐藏UI</button>
+      <div id="affection-indicator"><span class="heart">♥</span> <span id="aff-val">0</span></div>
+    </div>
+
+    <!-- Settings panel -->
+    <div id="settings-panel">
+      <div class="set-title">设 置</div>
+      <label>BGM 音量 <input type="range" id="vol-bgm" min="0" max="100" value="60" oninput="updateVolumes()"></label>
+      <label>UI 透明度 <input type="range" id="opacity-ui" min="40" max="100" value="85" oninput="updateOpacity()"></label>
+      <label>文字速度 <input type="range" id="text-speed" min="20" max="100" value="55" oninput="updateTextSpeed()"></label>
+      <button class="top-btn" onclick="saveGame()" style="width:100%;text-align:center;">💾 保存进度</button>
+      <button class="top-btn" onclick="loadGame()" style="width:100%;text-align:center;">📂 读取进度</button>
+    </div>
+
+    <!-- Name tag -->
+    <div id="name-tag"></div>
+
+    <!-- Text panel -->
+    <div id="text-panel">
+      <div id="dialogue-text"></div>
+      <div id="choices-area"></div>
+    </div>
+
+    <!-- Click hint -->
+    <div id="click-hint">点击继续 ▸</div>
+  </div>
+</div>
+
+<script>
+// ======================== PATHS ========================
+const BG_PATH  = 'images/bg/';
+const CHAR_PATH = 'images/char/';
+const CG_PATH   = 'images/cg/';
+const BGM_PATH  = 'images/bgm/';
+
+// ======================== GAME STATE ========================
+let affection = 0;
+let currentLine = 0;
+let currentScene = null;
+let currentScript = [];
+let isTyping = false;
+let typeTimer = null;
+let textSpeed = 55;       // ms per char
+let uiHidden = false;
+let settingsOpen = false;
+let gameStarted = false;
+let bgmCurrent = null;
+let bgmAudio = null;
+let bgmVolume = 0.6;
+let uiOpacity = 0.85;
+
+// ======================== AUDIO ========================
+function playBGM(filename, vol) {
+  const targetVol = vol !== undefined ? vol : bgmVolume;
+  if (bgmAudio && bgmCurrent === filename) return;
+
+  if (bgmAudio) {
+    // Fade out current
+    const old = bgmAudio;
+    let fadeVol = old.volume;
+    const fadeOut = setInterval(() => {
+      fadeVol = Math.max(0, fadeVol - 0.04);
+      old.volume = fadeVol;
+      if (fadeVol <= 0) { clearInterval(fadeOut); old.pause(); old.remove(); }
+    }, 60);
+  }
+
+  if (!filename) { bgmCurrent = null; bgmAudio = null; return; }
+
+  const audio = new Audio(BGM_PATH + filename);
+  audio.loop = true;
+  audio.volume = 0;
+  audio.play().catch(() => {});
+  bgmAudio = audio;
+  bgmCurrent = filename;
+
+  // Fade in
+  let fadeVol = 0;
+  const fadeIn = setInterval(() => {
+    fadeVol = Math.min(targetVol, fadeVol + 0.03);
+    audio.volume = fadeVol;
+    if (fadeVol >= targetVol) clearInterval(fadeIn);
+  }, 60);
+}
+
+function updateVolumes() {
+  bgmVolume = parseInt(document.getElementById('vol-bgm').value) / 100;
+  if (bgmAudio) bgmAudio.volume = bgmVolume;
+}
+
+function updateOpacity() {
+  uiOpacity = parseInt(document.getElementById('opacity-ui').value) / 100;
+  document.documentElement.style.setProperty('--ui-opacity', uiOpacity);
+}
+
+function updateTextSpeed() {
+  textSpeed = 105 - parseInt(document.getElementById('text-speed').value); // invert: 20→85, 100→5
+}
+
+function toggleSettings() {
+  settingsOpen = !settingsOpen;
+  document.getElementById('settings-panel').classList.toggle('open', settingsOpen);
+}
+
+function toggleHideUI() {
+  uiHidden = !uiHidden;
+  document.getElementById('ui-layer').classList.toggle('hidden', uiHidden);
+  document.getElementById('btn-hide-ui').classList.toggle('active', uiHidden);
+  document.getElementById('btn-hide-ui').textContent = uiHidden ? '👁 显示UI' : '👁 隐藏UI';
+}
+
+// ======================== SAVE / LOAD ========================
+function saveGame() {
+  const data = {
+    affection, currentLine, currentScene,
+    bgmCurrent,
+    timestamp: Date.now(),
+  };
+  localStorage.setItem('galgame_save', JSON.stringify(data));
+  showQuickMsg('已保存');
+  toggleSettings();
+}
+
+function loadGame() {
+  const raw = localStorage.getItem('galgame_save');
+  if (!raw) { showQuickMsg('没有存档'); toggleSettings(); return; }
+  const data = JSON.parse(raw);
+  affection = data.affection;
+  currentLine = data.currentLine;
+  currentScene = data.currentScene;
+  document.getElementById('aff-val').textContent = affection;
+  if (data.bgmCurrent) playBGM(data.bgmCurrent);
+  settingsOpen = false;
+  document.getElementById('settings-panel').classList.remove('open');
+
+  // Find the scene in script
+  const scene = scenes.find(s => s.id === currentScene);
+  if (!scene) { showQuickMsg('存档损坏'); return; }
+  currentScript = scene.lines;
+
+  // Advance to the saved line
+  const target = Math.min(currentLine, currentScript.length - 1);
+  currentLine = target;
+  renderLine();
+}
+
+function showQuickMsg(msg) {
+  // Tiny toast
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99;background:rgba(0,0,0,0.8);color:#fff;padding:8px 24px;border-radius:20px;font-size:0.8rem;pointer-events:none;transition:opacity 0.5s;';
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 500); }, 1500);
+}
+
+// ======================== PRELOAD ========================
+function preloadImages(paths) {
+  const container = document.getElementById('preload');
+  paths.forEach(src => {
+    const img = document.createElement('img');
+    img.src = src;
+    container.appendChild(img);
+  });
+}
+
+// ======================== RENDER ========================
+function setBG(filename) {
+  const layer = document.getElementById('bg-layer');
+  layer.style.opacity = '0';
+  setTimeout(() => {
+    layer.style.backgroundImage = filename ? `url(${BG_PATH}${filename})` : 'none';
+    layer.style.opacity = '1';
+  }, 300);
+}
+
+let _charTimer = null;
+let _charImg = null;
+
+function setChar(filename) {
+  const layer = document.getElementById('char-layer');
+  // Clear any pending timer
+  if (_charTimer) { clearTimeout(_charTimer); _charTimer = null; }
+
+  if (!filename) {
+    // Remove character
+    if (_charImg) { _charImg.style.opacity = '0'; _charImg = null; }
+    _charTimer = setTimeout(() => {
+      layer.innerHTML = '';
+      _charTimer = null;
+    }, 500);
+    return;
+  }
+
+  // If we already have an image, fade it out
+  if (_charImg) _charImg.style.opacity = '0';
+
+  _charTimer = setTimeout(() => {
+    // Remove old images
+    layer.innerHTML = '';
+    // Create single image
+    _charImg = document.createElement('img');
+    _charImg.src = CHAR_PATH + filename;
+    _charImg.style.opacity = '0';
+    _charImg.onload = () => { if (_charImg) _charImg.style.opacity = '1'; };
+    _charImg.onerror = () => { if (_charImg) _charImg.style.opacity = '1'; };
+    layer.appendChild(_charImg);
+    // Fallback
+    setTimeout(() => { if (_charImg) _charImg.style.opacity = '1'; }, 300);
+    _charTimer = null;
+  }, 300);
+}
+
+function showCG(filename, show) {
+  const layer = document.getElementById('cg-layer');
+  if (show && filename) {
+    layer.innerHTML = `<img src="${CG_PATH}${filename}" alt="">`;
+    layer.classList.add('active');
+  } else {
+    layer.classList.remove('active');
+    setTimeout(() => { layer.innerHTML = ''; }, 600);
+  }
+}
+
+function setNameTag(name) {
+  const tag = document.getElementById('name-tag');
+  tag.textContent = name || '';
+  tag.style.opacity = name ? '1' : '0';
+}
+
+function setAffection(val) {
+  affection = Math.max(0, Math.min(5, val));
+  document.getElementById('aff-val').textContent = affection;
+
+  // Brief heart glow effect
+  const hearts = document.querySelectorAll('#affection-indicator .heart');
+  hearts.forEach(h => {
+    h.style.transform = 'scale(1.6)';
+    h.style.color = '#ff9999';
+    setTimeout(() => { h.style.transform = 'scale(1)'; h.style.color = 'var(--accent)'; }, 400);
+  });
+}
+
+// ======================== TYPEWRITER ========================
+function typeText(text, callback) {
+  const el = document.getElementById('dialogue-text');
+  const choicesArea = document.getElementById('choices-area');
+  choicesArea.innerHTML = '';
+  el.textContent = '';
+  isTyping = true;
+
+  let i = 0;
+  const chars = [...text]; // handles CJK properly
+  function tick() {
+    if (i < chars.length) {
+      el.textContent += chars[i];
+      i++;
+      typeTimer = setTimeout(tick, textSpeed);
+      updateDebug();
+    } else {
+      isTyping = false;
+      typeTimer = null;
+      if (callback) callback();
+    }
+  }
+  tick();
+}
+
+function skipType() {
+  if (!isTyping) return false;
+  clearTimeout(typeTimer);
+  typeTimer = null;
+  isTyping = false;
+  const el = document.getElementById('dialogue-text');
+  // Show full text from current script line
+  const line = currentScript[currentLine];
+  if (line && line.text) el.textContent = line.text;
+  return true;
+}
+
+// ======================== CHOICES ========================
+function renderChoices(choices) {
+  const area = document.getElementById('choices-area');
+  area.innerHTML = '';
+  choices.forEach((ch, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.textContent = `${i + 1}. ${ch.text}`;
+    btn.onclick = () => selectChoice(ch);
+    area.appendChild(btn);
+  });
+  document.getElementById('click-hint').style.display = 'none';
+}
+
+function selectChoice(choice) {
+  if (choice.affection) setAffection(affection + choice.affection);
+  if (choice.bgm) playBGM(choice.bgm);
+
+  // Go to next scene
+  const targetScene = scenes.find(s => s.id === choice.nextScene);
+  if (targetScene) {
+    currentScene = choice.nextScene;
+    currentScript = targetScene.lines;
+    currentLine = 0;
+    document.getElementById('choices-area').innerHTML = '';
+    document.getElementById('click-hint').style.display = 'block';
+    if (targetScene.bgm) playBGM(targetScene.bgm);
+    if (targetScene.bg) setBG(targetScene.bg);
+    renderLine();
+  } else if (choice.nextScene === 'ending_true') {
+    showEnding('true');
+  } else if (choice.nextScene === 'ending_good') {
+    showEnding('good');
+  } else if (choice.nextScene === 'ending_normal') {
+    showEnding('normal');
+  }
+}
+
+// ======================== LINE RENDERING ========================
+function renderLine() {
+  if (!currentScript || currentLine >= currentScript.length) {
+    return;
+  }
+
+  const line = currentScript[currentLine];
+  if (!line) {
+    return;
+  }
+
+  try {
+    // Handle bg changes
+    if (line.bg) setBG(line.bg);
+    // Handle char changes
+    if (line.char !== undefined) setChar(line.char);
+    // Handle CG
+    if (line.cg !== undefined) {
+      showCG(line.cg, line.cgShow !== false);
+    } else if (line.cgShow === false) {
+      showCG(null, false);
+    }
+    // Handle BGM
+    if (line.bgm) playBGM(line.bgm);
+    // Handle affection
+    if (line.affection) setAffection(affection + line.affection);
+
+    // Name tag
+    if (line.speaker !== undefined) setNameTag(line.speaker);
+
+    // Choices override text
+    if (line.choices) {
+      renderChoices(line.choices);
+      return;
+    }
+
+    // Clear choices area
+    document.getElementById('choices-area').innerHTML = '';
+    document.getElementById('click-hint').style.display = 'block';
+
+    // Type text
+    if (line.text) {
+      typeText(line.text, () => {
+        // typing done
+      });
+    } else {
+      document.getElementById('dialogue-text').textContent = '';
+      advanceLine();
+    }
+  } catch(err) {
+    document.getElementById('dialogue-text').textContent = '出错了，请刷新页面重试。';
+  }
+}
+
+function advanceLine() {
+  if (isTyping) return;
+
+  if (currentScript && currentScript[currentLine] && currentScript[currentLine].choices) {
+    return;
+  }
+
+  currentLine++;
+  if (!currentScript || currentLine >= currentScript.length) {
+    // Scene ended — check for auto next
+    const scene = scenes.find(s => s.id === currentScene);
+    if (scene && scene.autoNext) {
+      // Special: resolve ending based on affection
+      if (scene.autoNext === '_resolve') {
+        if (affection >= 3) showEnding('true');
+        else if (affection >= 2) showEnding('good');
+        else showEnding('normal');
+        return;
+      }
+      const next = scenes.find(s => s.id === scene.autoNext);
+      if (next) {
+        currentScene = next.id;
+        currentScript = next.lines;
+        currentLine = 0;
+        if (next.bgm) playBGM(next.bgm);
+        if (next.bg) setBG(next.bg);
+        renderLine();
+        return;
+      }
+    }
+    // Check for ending
+    if (scene && scene.ending) {
+      showEnding(scene.ending);
+      return;
+    }
+    return;
+  }
+  renderLine();
+}
+
+// ======================== ENDINGS ========================
+function showEnding(type) {
+  const screen = document.getElementById('ending-screen');
+  const etype = document.getElementById('ending-type');
+  const etitle = document.getElementById('ending-title');
+  const esub = document.getElementById('ending-subtitle');
+
+  document.getElementById('ui-layer').style.opacity = '0';
+
+  switch (type) {
+    case 'true':
+      etype.textContent = 'TRUE END';
+      etitle.textContent = '余生，请多指教';
+      esub.textContent = '白色教堂里，她穿着婚纱转过身来。\n他看到那双含着泪光的眼睛，知道这一生都不会再松开这双手。\n——街角的那盏灯，从此以后，永远为他亮着。';
+      setBG('bg-church.png');
+      setChar(null);
+      showCG('cg-wedding.png', true);
+      playBGM('bgm-romance.mp3');
+      break;
+    case 'good':
+      etype.textContent = 'GOOD END';
+      etitle.textContent = '新的开始';
+      esub.textContent = '她没有立刻回答，只是低下头，嘴角悄悄弯了起来。\n黄昏的河畔，两个人的影子在夕阳下拉得很长很长。\n有些话，不需要说出来。';
+      setBG('bg-park.png');
+      setChar('char-loving.png');
+      showCG(null, false);
+      playBGM('bgm-romance.mp3');
+      break;
+    case 'normal':
+      etype.textContent = 'NORMAL END';
+      etitle.textContent = '各自的远方';
+      esub.textContent = '他最终还是没有把那些话说出口。\n餐厅的灯光依旧温暖，他依旧是那个坐在靠窗位置的客人。\n有些感情，像一杯凉了的乌龙茶，安静地放在那里。';
+      setBG('bg-restaurant.png');
+      setChar('char-default.png');
+      showCG(null, false);
+      playBGM('bgm-daily.mp3');
+      break;
+  }
+
+  document.getElementById('name-tag').style.opacity = '0';
+  document.getElementById('dialogue-text').textContent = '';
+  document.getElementById('choices-area').innerHTML = '';
+  document.getElementById('click-hint').style.display = 'none';
+
+  screen.classList.add('active');
+}
+
+function returnToTitle() {
+  document.getElementById('ending-screen').classList.remove('active');
+  document.getElementById('ui-layer').style.opacity = '1';
+  showCG(null, false);
+  setChar(null);
+  setBG('');
+  setNameTag('');
+  document.getElementById('dialogue-text').textContent = '';
+  document.getElementById('choices-area').innerHTML = '';
+  document.getElementById('click-hint').style.display = 'none';
+  affection = 0;
+  currentLine = 0;
+  currentScene = null;
+  currentScript = [];
+  document.getElementById('aff-val').textContent = '0';
+  document.getElementById('title-screen').classList.remove('hidden');
+  gameStarted = false;
+  if (bgmAudio) { bgmAudio.pause(); bgmAudio.remove(); bgmAudio = null; bgmCurrent = null; }
+}
+
+// ======================== INPUT HANDLING ========================
+document.getElementById('game-view').addEventListener('click', (e) => {
+  if (!gameStarted) return;
+
+  if (e.target.closest('#top-bar') || e.target.closest('#settings-panel') ||
+      e.target.closest('#choices-area') || e.target.closest('#ending-screen')) return;
+
+  if (isTyping) {
+    skipType();
+    return;
+  }
+  advanceLine();
+});
+
+// Keyboard
+document.addEventListener('keydown', (e) => {
+  if (!gameStarted) return;
+  if (e.key === ' ' || e.key === 'Enter') {
+    e.preventDefault();
+    if (isTyping) { skipType(); return; }
+    advanceLine();
+  }
+  if (e.key === 'h') toggleHideUI();
+  if (e.key === 'Escape') toggleSettings();
+});
+
+// ======================== START GAME ========================
+function startGame() {
+  document.getElementById('title-screen').classList.add('hidden');
+  gameStarted = true;
+  affection = 0;
+  document.getElementById('aff-val').textContent = '0';
+  document.getElementById('ui-layer').style.opacity = '1';
+  document.getElementById('click-hint').style.display = 'block';
+
+  // Load scene 1
+  const scene = scenes.find(s => s.id === 'scene1');
+  currentScene = scene.id;
+  currentScript = scene.lines;
+  currentLine = 0;
+  setBG(scene.bg);
+  playBGM(scene.bgm);
+  renderLine();
+}
+
+// ======================== SCENE DATA ========================
+const scenes = [
+// ────────────────────────────────────────
+// SCENE 1: First Meeting
+// ────────────────────────────────────────
+{
+  id: 'scene1',
+  bg: 'bg-restaurant.png',
+  bgm: 'bgm-daily.mp3',
+  lines: [
+    {
+      speaker: '',
+      text: '傍晚六点四十分，天色已经暗了大半。街边的路灯刚刚亮起来，像是一条橙色的河流，沿着人行道缓缓铺开。',
+    },
+    {
+      speaker: '',
+      text: '我在公司楼下的街道上漫无目的地走着。加班是家常便饭，但今天的工作结束得还算早——至少天还没完全黑。',
+    },
+    {
+      speaker: '',
+      text: '肚子发出轻微的抗议声，我停下脚步，目光扫过街道两旁。便利店？还是那家新开的拉面馆？',
+    },
+    {
+      speaker: '',
+      text: '就在这时，一扇木质推拉门上挂着的暖黄色灯牌吸引了我的注意——「街かど食堂」。字体圆润，带着一点手写的稚拙。门缝里透出橙色的灯光，和街灯的光融在一起。',
+    },
+    {
+      speaker: '',
+      text: '我犹豫了几秒。一个人进陌生的餐厅，对我来说总是需要一点勇气。但那股从门缝里飘出来的、带着酱油和味醂甜味的香气，比我的犹豫更有说服力。',
+    },
+    {
+      speaker: '',
+      text: '……',
+      char: null,
+    },
+    {
+      speaker: '',
+      text: '推开门的瞬间，一阵轻柔的风铃声响了起来。店里不大，只有五六张桌子，靠窗的位置空着。暖色的光从天花板的纸灯笼洒下来，把木质的桌面染成了一层蜂蜜色。',
+    },
+    {
+      speaker: '',
+      text: '然后，我看到了她。',
+      char: 'char-default.png',
+    },
+    {
+      speaker: '？？？',
+      text: '「いらっしゃいませ——欢迎光临。」',
+    },
+    {
+      speaker: '',
+      text: '她从吧台后面抬起头，声音温和得像是春天化开的溪水。那一瞬间，我有些恍惚——她看起来大约三十出头，棕色的长发松松地挽在一侧肩上，围着一条米白色的围裙，围裙下面是一件简单的白色衬衫。',
+    },
+    {
+      speaker: '',
+      text: '她的眼睛很亮，但没有那种令人紧张的锐利。更像是……冬夜里窗台上的一盏暖灯，安静地、柔软地照过来。',
+    },
+    {
+      speaker: '？？？',
+      text: '「一个人吗？靠窗的位子空着哦。那边能看到街景，一个人吃饭也不会觉得闷。」',
+    },
+    {
+      speaker: '',
+      text: '我点了点头，几乎是下意识地走向了那个靠窗的座位。她递来菜单的时候，手指不经意地碰到了我的手背，温热的。',
+    },
+    {
+      speaker: '',
+      text: '菜单是手写的，字迹和她的人一样——温润、干净，每个字都写得认认真真。我看了很久，其实并不是因为选择困难，而是心里莫名地有些紧张。',
+    },
+    {
+      choices: [
+        {
+          text: '鼓起勇气，试着问她推荐什么',
+          nextScene: 'scene2a',
+          affection: 1,
+        },
+        {
+          text: '红着脸低下头，随便指了一道菜',
+          nextScene: 'scene2b',
+          affection: 0,
+        }
+      ]
+    },
+  ]
+},
+
+// ────────────────────────────────────────
+// SCENE 2a: Getting Closer (high affection route)
+// ────────────────────────────────────────
+{
+  id: 'scene2a',
+  bg: 'bg-restaurant.png',
+  bgm: 'bgm-daily.mp3',
+  lines: [
+    {
+      speaker: '',
+      text: '我清了清嗓子，努力让自己的声音听起来不那么颤抖。「那个……请问有什么推荐的吗？」',
+      char: 'char-default.png',
+    },
+    {
+      speaker: '',
+      text: '她先是微微一愣，然后那双眼睛弯了起来——不是客套的营业式微笑，而是发自内心的、带着一点惊喜的笑意。',
+    },
+    {
+      speaker: '甘雨',
+      text: '「哎呀，你问对人了。今天早上去市场的时候，刚好进了一批很新鲜的鲑鱼。我做了盐烤鲑鱼定食，要不要试试看？配的是我昨晚刚煮的梅子酱。」',
+      char: 'char-default.png',
+    },
+    {
+      speaker: '',
+      text: '她说这些的时候，语气里有一种毫不掩饰的自豪，却又不是炫耀——更像是一个认真对待食物的人，发自内心地希望你能尝到她用心的味道。',
+    },
+    {
+      speaker: '',
+      text: '「还有——」她忽然压低了一点声音，像是在分享什么秘密，「今天的味噌汤里加了北海道来的甜虾头，特别鲜。一般人我可不告诉他们。」',
+      char: 'char-default.png',
+    },
+    {
+      speaker: '',
+      text: '不知道为什么，看着她略带调皮的表情，我的嘴角也不自觉地翘了起来。那顿饭吃得很慢。不是因为分量大，而是因为我不想那么快离开。',
+    },
+    {
+      speaker: '',
+      text: '从那以后，我成了「街かど食堂」的常客。一周至少三次。',
+    },
+    {
+      speaker: '',
+      text: '开始的时候，我只是安静地坐在靠窗的位子上，点一份固定的盐烤鲑鱼定食，吃完后说一声谢谢，然后离开。但渐渐地，对话从三句变成了十句，从十句变成了半小时。',
+    },
+    {
+      speaker: '',
+      text: '她知道了我总是在周三加班到很晚，知道我喜欢喝热乌龙而不是冰水，知道我在看一本很厚的、她说"一看就很难懂"的小说。而我也知道了她的名字——甘雨。',
+    },
+    {
+      speaker: '',
+      text: '甘雨。她说这是奶奶给她取的名字，因为出生的那天，久旱的城市忽然下了一场细细密密的甘霖。',
+      char: 'char-loving.png',
+    },
+    {
+      speaker: '',
+      text: '她独自经营这家店已经三年了。菜单上的每一道菜都是她自己研发的，墙上的干花是她自己晒的，连吧台上那只打盹的招财猫都是她从跳蚤市场带回来的。',
+    },
+    {
+      speaker: '',
+      text: '我喜欢看她忙碌的样子。她在吧台和料理台之间走动的时候，围裙的系带会轻轻晃动，棕色的发丝偶尔从耳后滑落。',
+    },
+    {
+      choices: [
+        {
+          text: '「甘雨姐，今天有什么特别推荐的？」——像往常一样，从食物开始',
+          nextScene: 'scene3',
+          affection: 1,
+        },
+        {
+          text: '「一个人经营这家店，很辛苦吧？」——试着靠近她的内心世界',
+          nextScene: 'scene3',
+          affection: 0,
+        }
+      ]
+    },
+  ]
+},
+
+// ────────────────────────────────────────
+// SCENE 2b: Staying Quiet (neutral route)
+// ────────────────────────────────────────
+{
+  id: 'scene2b',
+  bg: 'bg-restaurant.png',
+  bgm: 'bgm-daily.mp3',
+  lines: [
+    {
+      speaker: '',
+      text: '我的脸颊有些发烫，低着头，手指在菜单上随便指了一道菜。她似乎注意到了我的窘迫，并没有追问，只是轻轻地点了点头。',
+      char: 'char-default.png',
+    },
+    {
+      speaker: '甘雨',
+      text: '「猪排饭，好的。稍等一下哦。」声音里没有任何的不耐烦，反而带着一丝……温柔？',
+      char: 'char-default.png',
+    },
+    {
+      speaker: '',
+      text: '她转身走向料理台。我看着她的背影——围裙的系带在腰后打了一个简洁的蝴蝶结，棕色的长发随着她的动作轻轻晃动。料理台上很快就响起了油锅的滋滋声。',
+    },
+    {
+      speaker: '',
+      text: '那天的猪排饭很好吃。面衣炸得酥脆，里面的肉还保持着恰到好处的汁水。酱汁是甜口的，带着一点淡淡的姜味，应该是她自己调的。',
+    },
+    {
+      speaker: '',
+      text: '我低着头专心吃饭，偶尔用余光瞥一眼吧台的方向。她正用一块干净的白布擦拭着杯子，动作很慢很仔细，像是在对待什么珍贵的东西。',
+    },
+    {
+      speaker: '',
+      text: '从那以后，我开始不自觉地在下班后往那个方向走。有时候加班晚了，远远看到店里的灯还亮着，心里就会莫名地觉得踏实。',
+    },
+    {
+      speaker: '',
+      text: '我还是不太敢主动说话。但她似乎记住了我的习惯——靠窗的座位、热的乌龙茶、不加葱。每次进店，不用我开口，她就会笑着点点头，然后转身开始准备。',
+    },
+    {
+      speaker: '',
+      text: '那种被记住的感觉，像是一阵细雨慢慢渗进干涸的土地里。安静地、不声张地，让某个角落重新变得柔软。',
+    },
+    {
+      speaker: '甘雨',
+      text: '「今天工作很累吗？你看起来比平时更安静呢。」有一天，她忽然这么问。',
+      char: 'char-sad.png',
+    },
+    {
+      speaker: '',
+      text: '我有些惊讶地抬起头。不是因为她在问我——而是因为她的语气里有那种很自然的关切。不是客套寒暄，是真的在看、在留意、在关心。',
+    },
+    {
+      choices: [
+        {
+          text: '「……谢谢你注意到了。」——第一次坦率地回应她的关心',
+          nextScene: 'scene3',
+          affection: 1,
+        },
+        {
+          text: '「还好，只是有点累。」——轻描淡写地搪塞过去',
+          nextScene: 'scene3',
+          affection: 0,
+        }
+      ]
+    },
+  ]
+},
+
+// ────────────────────────────────────────
+// SCENE 3: The Night - Emotional Core (No Choices)
+// ────────────────────────────────────────
+{
+  id: 'scene3',
+  bg: 'bg-night.png',
+  bgm: 'bgm-emotional.mp3',
+  lines: [
+    {
+      speaker: '',
+      text: '那是一个特别冷的夜晚。',
+      char: null,
+    },
+    {
+      speaker: '',
+      text: '加班结束的时候已经快十一点了。办公楼外的街道几乎空了，便利店的白光在柏油路上投下长方形的光斑。风很大，我把外套的领子竖起来，低着头快步往车站的方向走去。',
+    },
+    {
+      speaker: '',
+      text: '走到街角的时候，我的脚步忽然慢了下来。',
+    },
+    {
+      speaker: '',
+      text: '「街かど食堂」的灯还亮着。',
+    },
+    {
+      speaker: '',
+      text: '不是那种明亮的、还在营业的灯光——而是吧台角落里亮着的一盏小灯。暖黄色的光晕在黑暗的街道上，像一颗不肯熄灭的星星。',
+    },
+    {
+      speaker: '',
+      text: '我犹豫了几秒，最后还是推开了那扇木质推拉门。风铃响了。店里很安静，桌椅都已经收拾整齐，椅子倒扣在桌面上。空气里还残留着淡淡的酱油和柴鱼高汤的香气。',
+    },
+    {
+      speaker: '',
+      text: '然后我看到了她。',
+    },
+    {
+      speaker: '',
+      text: '她趴在吧台角落的桌子上，侧着头枕着交叠的手臂，围裙还没解下来。棕色的长发散落在肩头和桌上，在灯光下看起来像是融化的蜂蜜。',
+    },
+    {
+      speaker: '',
+      text: '她睡着了。呼吸很轻很稳，睫毛在脸上投下两弯细小的影子。睡着的样子看起来比平时更年轻——少了几分成熟女性的从容，多了一点像少女般的柔软。',
+      cg: 'cg-sleeping.png',
+      cgShow: true,
+    },
+    {
+      speaker: '',
+      text: '我放轻脚步走过去，小心翼翼地、几乎不敢呼吸。可是风铃已经响过了。还没等我靠近，她的肩膀微微动了一下，然后——',
+      char: 'char-surprised.png',
+      cgShow: false,
+    },
+    {
+      speaker: '甘雨',
+      text: '「……嗯？啊——」她慢慢睁开眼睛，看到我的时候先是茫然地眨了眨眼，然后忽然坐直了身子，脸颊迅速染上了一层薄红。',
+      char: 'char-shy.png',
+    },
+    {
+      speaker: '甘雨',
+      text: '「啊、对、对不起！不小心就睡着了——现在几点了？哎呀，围裙都皱了……」',
+    },
+    {
+      speaker: '',
+      text: '她慌乱地整理着头发和围裙，耳尖都红了。那个白天总是从容不迫的她，此刻看起来却像是一个被抓到偷懒的孩子。',
+    },
+    {
+      speaker: '',
+      text: '「已经十一点多了。」我轻声说。「你……怎么还没下班？」',
+    },
+    {
+      speaker: '',
+      text: '她整理头发的动作停了下来。手指还停留在发梢，眼睛却垂了下去。安静了几秒，然后她笑了——一个很轻很轻的笑，嘴角只弯了一点点。',
+      char: 'char-loving.png',
+    },
+    {
+      speaker: '甘雨',
+      text: '「因为……我知道你今天加班。每次周三你加班的时候，路过这里都会看一眼。」',
+    },
+    {
+      speaker: '甘雨',
+      text: '「我怕你路过的时候，看到店里黑着灯会……会觉得有点冷清。」',
+    },
+    {
+      speaker: '',
+      text: '她说这句话的时候，视线没有看着我，而是落在吧台上那盏小灯上。声音很轻，像是在自言自语。',
+    },
+    {
+      speaker: '',
+      text: '但每一个字都像是一颗石子，投进了我心里的某个地方。一圈一圈的涟漪，荡开来。',
+    },
+    {
+      speaker: '',
+      text: '她知道我的习惯。知道我的时间。知道我加班后会从这条路走。知道我——这个连和人对视都会紧张的、毫不起眼的、自卑的家伙——会想看到店里的灯还亮着。',
+    },
+    {
+      speaker: '',
+      text: '她一直在等我。',
+      affection: 1,
+    },
+    {
+      speaker: '',
+      text: '「还没吃饭吧。」她不等我回答，已经转身走向了料理台。围裙的系带在腰后轻轻晃着，她打开冰箱，拿出一个小锅。「咖喱还剩一些。天冷，热热的正好。」',
+    },
+    {
+      speaker: '',
+      text: '她把咖喱放进锅里，打开炉火。不一会儿，香料的味道就填满了整个空荡荡的餐厅。我坐在吧台前看着她——她用木勺慢慢地搅着锅里的咖喱，动作很轻，像是在照顾什么需要温柔对待的东西。',
+    },
+    {
+      speaker: '甘雨',
+      text: '「咖喱这个东西啊，」她忽然开口，「放了一夜之后反而更好吃。因为香料的味道会慢慢渗透进去。就像……」她顿了一下，「就像很多事，需要时间。」',
+    },
+    {
+      speaker: '',
+      text: '她没有继续说下去。但我觉得我懂她的意思。有些感情，也在不知不觉间，被时间煮进了深处。',
+    },
+    {
+      speaker: '',
+      text: '那天的咖喱是甜的。不是加了糖的那种甜，而是洋葱被炒到焦化之后释放出来的、醇厚的、让人想要慢慢品尝的甜。我吃了两碗，她坐在吧台对面擦着杯子，嘴角一直挂着一抹安静的弧度。',
+      char: 'char-default.png',
+    },
+    {
+      speaker: '',
+      text: '吃完之后，我坚持要等她收拾完一起走。她拗不过我，只好加快了手上的动作。关掉炉火、擦干净吧台、把剩下的食材放回冰箱。每一个动作都很熟练，透着一个独自生活了三年的人特有的从容。',
+    },
+    {
+      speaker: '甘雨',
+      text: '「好了，可以走了。」她拉下店门口的卷帘门，锁好。转过身来的时候，围裙已经解下来搭在手臂上，外面套了一件米色的风衣。围裙下面那件白衬衫，在路灯下看起来更加柔软了。',
+    },
+    {
+      speaker: '',
+      text: '街上几乎没有人。只有我们两个的脚步声，以不同的节奏交错着。路灯把我们的影子拉得很长很长，在我们身后慢慢铺开。',
+    },
+    {
+      speaker: '',
+      text: '她走在我的右边，比我矮了半个头。从这个角度看下去，能看到她棕色的发丝在夜风里轻轻飘动，还有耳后那一小截被路灯染成金色的皮肤。',
+      cg: 'cg-walking.png',
+      cgShow: true,
+    },
+    {
+      speaker: '',
+      text: '我们并没有离得很近。手臂之间的距离大概还有一个人的宽度。但是每走几步，她的风衣下摆就会轻轻扫过我的手背。轻轻的，像一片落叶擦过水面。',
+    },
+    {
+      speaker: '',
+      text: '我忽然意识到——这是我第一次，不想让这段路走到尽头。',
+    },
+    {
+      speaker: '',
+      text: '「今晚……」我的声音在空旷的街道上显得很小。「谢谢你等我。」',
+    },
+    {
+      speaker: '',
+      text: '她沉默了几秒，然后把半张脸缩进了风衣的领子里。路灯太亮了，我还是看到了——她悄悄弯起来的眼角。',
+      char: 'char-shy.png',
+      cgShow: false,
+    },
+    {
+      speaker: '甘雨',
+      text: '「……才不是等呢。就是正好……那个、正好睡着了而已。」',
+    },
+    {
+      speaker: '',
+      text: '她说谎的水平，和她的料理水平，差的不是一点半点。',
+    },
+    {
+      speaker: '',
+      text: '我没有拆穿她。只是把脚步放得更慢了一些，让她走完这段路的时间可以再长一点。那天的月亮很细很细，像是一根银色的线，把夜空和地面上的两道人影，轻轻地缝在了一起。',
+    },
+    {
+      speaker: '',
+      text: '回到公寓之后，我躺在床上很久都没有睡着。闭上眼，眼前晃动的是她在路灯下的侧脸——那种安静的、带着一点点倦意却又不肯把温柔收回去的表情。',
+    },
+    {
+      speaker: '',
+      text: '我把手放在胸口，感受着胸腔里那颗心脏的跳动。它跳得比平时要快一些。',
+    },
+    {
+      speaker: '',
+      text: '我忽然明白了一件事：不知道从什么时候开始，「街かど食堂」对我来说，已经不只是一家餐厅了。',
+      affection: 1,
+    },
+  ],
+  autoNext: 'scene4',
+},
+
+// ────────────────────────────────────────
+// SCENE 4: Park Encounter
+// ────────────────────────────────────────
+{
+  id: 'scene4',
+  bg: 'bg-park.png',
+  bgm: 'bgm-emotional.mp3',
+  lines: [
+    {
+      speaker: '',
+      text: '又是一个休息日的下午。初秋的阳光不再那么灼人，变得温柔了一些，透过云层洒下来，在地面上铺成一地金黄色的碎光。',
+      char: null,
+    },
+    {
+      speaker: '',
+      text: '我在河畔公园里散步。其实本来没有特别想来这里——只是从公寓出来后，脚步自己走了这个方向。',
+    },
+    {
+      speaker: '',
+      text: '然后，我在老樱树下的长椅上看到了一个熟悉的身影。',
+    },
+    {
+      speaker: '',
+      text: '她今天没有穿围裙。米白色的针织衫、深蓝色的长裙，头发没有像在店里那样挽着，而是随意地披散在肩上。她坐在长椅上，弯着腰，正在喂脚边聚集的几只野猫。',
+      char: 'char-default.png',
+    },
+    {
+      speaker: '',
+      text: '阳光从树叶的缝隙里漏下来，在她身上洒下一层斑驳的光斑。她没有化妆，但那张素净的脸在大自然的光线下反而更加动人。',
+    },
+    {
+      speaker: '',
+      text: '「——甘雨姐？」',
+    },
+    {
+      speaker: '甘雨',
+      text: '她回过头来看到是我，先是惊讶地张了张嘴，然后笑了——笑得比平时在店里还要灿烂。',
+      char: 'char-default.png',
+    },
+    {
+      speaker: '甘雨',
+      text: '「哎呀！你也来这个公园吗？我从没在这里碰到过你呢。快来坐——这只三花猫叫牛奶，因为它鼻子这里有一块白色的毛。那只黑色的叫墨汁，脾气不太好，给它吃的也一副欠了它小鱼干的样子。」',
+    },
+    {
+      speaker: '',
+      text: '她叽叽喳喳地介绍着每一只猫的名字和性格，语气里满是孩子般的快乐。我坐在她旁边的长椅上，听着听着也笑了。原来她私下里是这样的——活泼、开朗，比店里那个娴静的老板娘，更加鲜活。',
+    },
+    {
+      speaker: '',
+      text: '猫们吃完带来的小鱼干，一只接一只满足地离开了。安静下来之后，她靠在椅背上，望着远处河面上的夕阳。天边的云被染成了一层一层的橙红和粉紫。',
+    },
+    {
+      speaker: '',
+      text: '「有时候会想，」她忽然轻轻开口，「如果当初没有开这家店，现在的我会在哪里呢。」',
+      char: 'char-sad.png',
+    },
+    {
+      speaker: '',
+      text: '她顿了顿，目光没有离开那片晚霞。',
+    },
+    {
+      speaker: '甘雨',
+      text: '「三年前刚开店的时候，很多人不看好。说我一个女的、一个人、没有经验做不长。头几个月确实很难，几乎没有人来。每天晚上收工的时候，食材剩下一大半，不知道该高兴还是该难过。」',
+    },
+    {
+      speaker: '甘雨',
+      text: '「但是啊——」她把被风吹乱的头发别到耳后，「我就是想做。想开一家店，让人吃到好吃的东西之后，会觉得今天还不错、明天也想好好过。」',
+      char: 'char-loving.png',
+    },
+    {
+      speaker: '',
+      text: '她说完这句话之后，安静了很长时间。我也安静着。不是因为不知道该说什么，而是觉得这一刻的沉默本身，就是一种沟通。',
+    },
+    {
+      speaker: '',
+      text: '风吹过河面，带来水的味道和她发间洗发水的淡淡花香。夕阳把我们两个人的影子投在草地上，两个影子没有靠在一起，但中间的距离已经比上一次走夜路时又近了一点点。',
+    },
+    {
+      choices: [
+        {
+          text: '「我会陪着你的。」——看着她的眼睛，认真地说',
+          nextScene: 'scene5',
+          affection: 1,
+        },
+        {
+          text: '安静地坐在旁边，不去打破这一刻的沉默',
+          nextScene: 'scene5',
+          affection: 0,
+        }
+      ]
+    },
+  ],
+  autoNext: 'scene5',
+},
+
+// ────────────────────────────────────────
+// SCENE 5: Confession → Endings
+// ────────────────────────────────────────
+{
+  id: 'scene5',
+  bg: 'bg-restaurant.png',
+  bgm: 'bgm-emotional.mp3',
+  lines: [
+    {
+      speaker: '',
+      text: '又是一个傍晚。我坐在「街かど食堂」靠窗的老位子上，面前的乌龙茶已经凉了，但我的手没有去碰它。',
+      char: 'char-default.png',
+    },
+    {
+      speaker: '',
+      text: '今天店里只有我一个客人。空气安静得能听到墙上时钟的秒针走动。她在吧台后面整理碗碟，陶瓷轻轻碰在一起的声音，在寂静中显得格外清晰。',
+    },
+    {
+      speaker: '',
+      text: '我握了握拳，掌心里全是汗。脑子里翻来覆去地想了很多种开场白——但每一种都在下一秒被自己否定了。太突兀了、太唐突了、万一被当成开玩笑怎么办、万一连客人都做不成了怎么办。',
+    },
+    {
+      speaker: '',
+      text: '可是胸腔里那颗心脏，它不肯再等了。它用每一次跳动，推着那些话，往喉咙口涌。',
+    },
+    {
+      speaker: '',
+      text: '我深吸了一口气。窗外的街灯刚好亮了起来。',
+    },
+    {
+      speaker: '',
+      text: '「——甘雨姐。」',
+      char: 'char-surprised.png',
+    },
+    {
+      speaker: '',
+      text: '她停下手中的动作，抬起头看着我。可能是因为我的语气和平时不太一样，她的眼神里有一丝疑惑，但更多的是那种她特有的、专注的温柔。',
+    },
+    {
+      speaker: '',
+      text: '「我……」声音在发抖。我用力掐了一下自己的手心。继续说。',
+    },
+    {
+      speaker: '',
+      text: '「我没有什么值得骄傲的东西。不擅长说话，也没有什么特别优秀的地方。这二十几年，我一直觉得自己是那种走在街上都不会被人多看一眼的人。」',
+    },
+    {
+      speaker: '',
+      text: '「但是每次来这里——每次推开那扇门、听到风铃的声音、看到你对我笑——我就会想：原来世界上还有这样一个地方。一个有人在等着我的地方。」',
+      char: 'char-shy.png',
+    },
+    {
+      speaker: '',
+      text: '我的声音越来越轻，但每一个字都用尽了全身的力气。',
+    },
+    {
+      speaker: '',
+      text: '「甘雨姐。我喜欢你。」',
+    },
+    {
+      speaker: '',
+      text: '「不是客人对老板娘的喜欢。是……是想要每天都能在打烊之后和你一起走夜路的那种喜欢。是想看你睡着的样子、想帮你擦杯子、想在你累的时候给你泡一杯热乌龙的那种喜欢。」',
+    },
+    {
+      speaker: '',
+      text: '说完了。每个字都说完了。店里陷入了一种很深的安静。墙上的秒针还在走，笃、笃、笃。',
+    },
+    {
+      speaker: '',
+      text: '她低着头，我看不到她的表情。',
+    },
+    {
+      speaker: '',
+      text: '然后——',
+    },
+    {
+      speaker: '',
+      text: '她用手背轻轻蹭了一下眼角。然后抬起头来。',
+      char: 'char-loving.png',
+    },
+  ],
+  // Ending is determined after this scene based on affection
+  autoNext: 'ending',
+},
+
+// ────────────────────────────────────────
+// ENDING: Triggered by affection check
+// ────────────────────────────────────────
+{
+  id: 'ending',
+  bg: 'bg-restaurant.png',
+  bgm: 'bgm-emotional.mp3',
+  lines: [
+    {
+      speaker: '甘雨',
+      text: '「你……真的是一个很笨的人呢。」',
+    },
+    {
+      speaker: '',
+      text: '她的声音在哽咽和笑意之间摇摆了一下。眼泪从她的眼眶里滑落下来，但她的嘴角却是上扬的。',
+    },
+    {
+      speaker: '甘雨',
+      text: '「你以为我不知道吗。你以为你每次偷偷看我的时候，我没有感觉到吗。你以为我……给你多添的那份小菜、记得你要热的乌龙茶、周三晚上明明困得要死还开着灯——是因为什么。」',
+      char: 'char-shy.png',
+    },
+    {
+      speaker: '甘雨',
+      text: '「我也在等你啊。从第一天开始，就一直在等。等你不再只是看着菜单，等你敢抬头看我，等你……把刚才那些话说出来。」',
+      char: 'char-loving.png',
+    },
+    {
+      speaker: '',
+      text: '她说着说着，笑了——眼睛里的泪水还没干，就用指尖轻轻抹去，然后对我弯起了眼睛。那种笑容并不完美，鼻子有点红，睫毛还湿着，但在我眼里，她从来没有像这一刻这么好看。',
+    },
+    {
+      speaker: '',
+      text: '我站起身，绕过吧台，走到她面前。没有说什么，只是伸出手，轻轻握住了她的手。她的手很软，有点凉，带着洗洁精的淡淡清香。',
+    },
+    {
+      speaker: '',
+      text: '她没有抽回手。只是把额头轻轻抵在了我的肩膀上。隔着衣料，我能感觉到她呼吸的温度，还有她微微颤抖的肩膀。',
+    },
+    {
+      speaker: '甘雨',
+      text: '「……再给我一点时间好吗。让我好好看看你。」',
+    },
+    {
+      speaker: '',
+      text: '我把手放在她的背上，轻得几乎感觉不到。窗外的路灯已经全部亮起来了，橙色的光穿过玻璃，落在我们两个人身上，像是被这个世界的温柔笼罩着。',
+    },
+    {
+      speaker: '',
+      text: '街角的那盏灯，这一次，不是在等我路过——而是在照亮我们两个人。',
+    },
+  ],
+  autoNext: '_resolve',
+}
+];
+
+// After the ending scene finishes, route to the correct ending based on affection
+// This is handled by the special autoNext value '_resolve' in advanceLine below
+
+// ======================== INIT ========================
+function init() {
+  // Preload all images
+  const allPaths = [];
+  ['bg-restaurant.png','bg-night.png','bg-park.png','bg-church.png'].forEach(f => allPaths.push(BG_PATH + f));
+  ['char-default.png','char-shy.png','char-surprised.png','char-sad.png','char-loving.png'].forEach(f => allPaths.push(CHAR_PATH + f));
+  ['cg-sleeping.png','cg-walking.png','cg-wedding.png'].forEach(f => allPaths.push(CG_PATH + f));
+  preloadImages(allPaths);
+
+  updateVolumes();
+  updateOpacity();
+  updateTextSpeed();
+}
+
+init();
+</script>
+</body>
+</html>
